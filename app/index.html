@@ -1,0 +1,16 @@
+<textarea id="t"></textarea>
+
+<script>
+    let timeout;
+
+    document.getElementById('t').addEventListener('input', function () {
+        clearTimeout(timeout);
+
+        timeout = setTimeout(() => {
+            let u = new SpeechSynthesisUtterance(this.value);
+            u.lang = 'he-IL';
+            speechSynthesis.cancel();
+            speechSynthesis.speak(u);
+        }, 500); // speak after pause while typing
+    });
+</script>

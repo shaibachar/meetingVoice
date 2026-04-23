@@ -1,16 +1,367 @@
-<textarea id="t"></textarea>
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Meeting Voice</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-<script>
-    let timeout;
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: #0f1117;
+      color: #e2e8f0;
+      min-height: 100vh;
+      padding: 24px 16px;
+    }
 
-    document.getElementById('t').addEventListener('input', function () {
-        clearTimeout(timeout);
+    h1 {
+      text-align: center;
+      font-size: 1.5rem;
+      font-weight: 600;
+      color: #a78bfa;
+      margin-bottom: 20px;
+      letter-spacing: 0.04em;
+    }
 
-        timeout = setTimeout(() => {
-            let u = new SpeechSynthesisUtterance(this.value);
-            u.lang = 'he-IL';
-            speechSynthesis.cancel();
-            speechSynthesis.speak(u);
-        }, 500); // speak after pause while typing
+    .composer {
+      background: #1e2130;
+      border: 1px solid #2d3148;
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 24px;
+    }
+
+    #t {
+      width: 100%;
+      min-height: 110px;
+      resize: vertical;
+      background: #13151f;
+      border: 1px solid #2d3148;
+      border-radius: 8px;
+      color: #e2e8f0;
+      font-size: 1.05rem;
+      padding: 12px;
+      outline: none;
+      line-height: 1.6;
+      transition: border-color 0.2s;
+      direction: rtl;
+    }
+
+    #t:focus { border-color: #7c3aed; }
+
+    .actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 12px;
+      flex-wrap: wrap;
+    }
+
+    button {
+      cursor: pointer;
+      border: none;
+      border-radius: 7px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      padding: 8px 18px;
+      transition: opacity 0.15s, transform 0.1s;
+    }
+
+    button:active { transform: scale(0.96); }
+
+    #playBtn {
+      background: #7c3aed;
+      color: #fff;
+      flex: 1;
+    }
+
+    #playBtn:hover { opacity: 0.88; }
+
+    #stopBtn {
+      background: #374151;
+      color: #e2e8f0;
+    }
+
+    #stopBtn:hover { opacity: 0.8; }
+
+    #clearBtn {
+      background: #1e2130;
+      color: #9ca3af;
+      border: 1px solid #2d3148;
+    }
+
+    #clearBtn:hover { color: #f87171; border-color: #f87171; }
+
+    /* History */
+    .history-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+
+    .history-header h2 {
+      font-size: 1rem;
+      font-weight: 600;
+      color: #94a3b8;
+    }
+
+    .badge {
+      background: #2d3148;
+      color: #a78bfa;
+      font-size: 0.75rem;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 99px;
+    }
+
+    #historyList {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .history-item {
+      background: #1e2130;
+      border: 1px solid #2d3148;
+      border-radius: 10px;
+      padding: 12px 14px;
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      transition: border-color 0.2s;
+    }
+
+    .history-item:hover { border-color: #4c4f7a; }
+
+    .history-item.playing { border-color: #7c3aed; background: #1a1730; }
+
+    .item-text {
+      flex: 1;
+      font-size: 0.95rem;
+      color: #cbd5e1;
+      line-height: 1.5;
+      word-break: break-word;
+      direction: rtl;
+    }
+
+    .item-meta {
+      font-size: 0.72rem;
+      color: #4b5563;
+      margin-top: 4px;
+      direction: ltr;
+      text-align: left;
+    }
+
+    .item-btns {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+
+    .btn-replay {
+      background: #7c3aed;
+      color: #fff;
+      padding: 6px 12px;
+      font-size: 0.8rem;
+    }
+
+    .btn-replay:hover { opacity: 0.85; }
+
+    .btn-edit {
+      background: #1f2937;
+      color: #93c5fd;
+      border: 1px solid #2d3148;
+      padding: 6px 12px;
+      font-size: 0.8rem;
+    }
+
+    .btn-edit:hover { border-color: #93c5fd; }
+
+    .btn-delete {
+      background: transparent;
+      color: #4b5563;
+      border: 1px solid transparent;
+      padding: 6px 10px;
+      font-size: 0.8rem;
+    }
+
+    .btn-delete:hover { color: #f87171; border-color: #f87171; }
+
+    .empty-state {
+      text-align: center;
+      color: #4b5563;
+      font-size: 0.9rem;
+      padding: 32px 0;
+    }
+  </style>
+</head>
+<body>
+  <h1>🎙 Meeting Voice</h1>
+
+  <div class="composer">
+    <textarea id="t" placeholder="הקלד טקסט לקריאה..."></textarea>
+    <div class="actions">
+      <button id="playBtn">▶ נגן</button>
+      <button id="stopBtn">■ עצור</button>
+      <button id="clearBtn">✕ נקה</button>
+    </div>
+  </div>
+
+  <div class="history-header">
+    <h2>היסטוריה</h2>
+    <span class="badge" id="countBadge">0</span>
+  </div>
+  <div id="historyList">
+    <div class="empty-state" id="emptyState">אין פריטים עדיין</div>
+  </div>
+
+  <script>
+    const textarea   = document.getElementById('t');
+    const playBtn    = document.getElementById('playBtn');
+    const stopBtn    = document.getElementById('stopBtn');
+    const clearBtn   = document.getElementById('clearBtn');
+    const historyList = document.getElementById('historyList');
+    const countBadge  = document.getElementById('countBadge');
+    const emptyState  = document.getElementById('emptyState');
+
+    let autoTimeout;
+    let history = [];
+    let currentPlayingId = null;
+
+    // ── Auto-speak on typing pause ──────────────────────────────
+    textarea.addEventListener('input', function () {
+      clearTimeout(autoTimeout);
+      if (!this.value.trim()) return;
+      autoTimeout = setTimeout(() => speak(this.value, true), 500);
     });
-</script>
+
+    // ── Manual play button ──────────────────────────────────────
+    playBtn.addEventListener('click', () => {
+      const text = textarea.value.trim();
+      if (text) speak(text, true);
+    });
+
+    stopBtn.addEventListener('click', () => {
+      speechSynthesis.cancel();
+      clearHighlight();
+    });
+
+    clearBtn.addEventListener('click', () => {
+      textarea.value = '';
+      textarea.focus();
+    });
+
+    // ── Core speak function ─────────────────────────────────────
+    function speak(text, saveToHistory = false) {
+      speechSynthesis.cancel();
+      clearHighlight();
+
+      const u = new SpeechSynthesisUtterance(text);
+      u.lang = 'he-IL';
+
+      if (saveToHistory) {
+        const id = addToHistory(text);
+        currentPlayingId = id;
+        highlightItem(id);
+        u.onend = () => { clearHighlight(); currentPlayingId = null; };
+        u.onerror = () => { clearHighlight(); currentPlayingId = null; };
+      }
+
+      speechSynthesis.speak(u);
+    }
+
+    function replayItem(id) {
+      const entry = history.find(e => e.id === id);
+      if (!entry) return;
+      speechSynthesis.cancel();
+      clearHighlight();
+
+      const u = new SpeechSynthesisUtterance(entry.text);
+      u.lang = 'he-IL';
+      currentPlayingId = id;
+      highlightItem(id);
+      u.onend  = () => { clearHighlight(); currentPlayingId = null; };
+      u.onerror = () => { clearHighlight(); currentPlayingId = null; };
+      speechSynthesis.speak(u);
+    }
+
+    // ── History management ──────────────────────────────────────
+    function addToHistory(text) {
+      // Avoid duplicate consecutive entries
+      if (history.length && history[0].text === text) return history[0].id;
+
+      const id = Date.now();
+      const now = new Date();
+      const timeStr = now.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+      history.unshift({ id, text, time: timeStr });
+      renderHistoryItem(history[0], true);
+      updateCount();
+      return id;
+    }
+
+    function renderHistoryItem(entry, prepend = false) {
+      emptyState.style.display = 'none';
+
+      const item = document.createElement('div');
+      item.className = 'history-item';
+      item.dataset.id = entry.id;
+
+      const preview = entry.text.length > 120 ? entry.text.slice(0, 120) + '…' : entry.text;
+
+      item.innerHTML = `
+        <div class="item-text">
+          <div>${escapeHtml(preview)}</div>
+          <div class="item-meta">${entry.time}</div>
+        </div>
+        <div class="item-btns">
+          <button class="btn-replay" title="נגן שוב">▶ נגן</button>
+          <button class="btn-edit"   title="ערוך מחדש">✎ ערוך</button>
+          <button class="btn-delete" title="מחק">✕</button>
+        </div>`;
+
+      item.querySelector('.btn-replay').addEventListener('click', () => replayItem(entry.id));
+
+      item.querySelector('.btn-edit').addEventListener('click', () => {
+        textarea.value = entry.text;
+        textarea.focus();
+        textarea.scrollTop = 0;
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      });
+
+      item.querySelector('.btn-delete').addEventListener('click', () => {
+        history = history.filter(e => e.id !== entry.id);
+        item.remove();
+        updateCount();
+        if (history.length === 0) emptyState.style.display = '';
+      });
+
+      if (prepend && historyList.firstChild) {
+        historyList.insertBefore(item, historyList.firstChild);
+      } else {
+        historyList.appendChild(item);
+      }
+    }
+
+    function highlightItem(id) {
+      document.querySelectorAll('.history-item').forEach(el => el.classList.remove('playing'));
+      const el = document.querySelector(`.history-item[data-id="${id}"]`);
+      if (el) el.classList.add('playing');
+    }
+
+    function clearHighlight() {
+      document.querySelectorAll('.history-item').forEach(el => el.classList.remove('playing'));
+    }
+
+    function updateCount() {
+      countBadge.textContent = history.length;
+    }
+
+    function escapeHtml(str) {
+      return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+  </script>
+</body>
+</html>
